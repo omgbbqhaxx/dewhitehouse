@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* whitehouse.gov paletinden alinan tokenlar */
+:root {
+  --deep-navy: #0d132d;
+  --navy: #151a30;
+  --navy-accent: #141f4d;
+  --zodiac: #0b1b33;
+  --red: #b50000;
+  --deep-red: #730000;
+  --amber: #ffbd00;
+  --stone: #e8e6e0;
+  --pale-gray: #d9dee8;
+  --light-gray: #f3f3f3;
+  --gray: #8a8a8a;
+  --charcoal: #293340;
+  --white: #ffffff;
+}
+
+html {
+  background: var(--white);
+  color-scheme: light;
+}
+
+body {
+  color: var(--deep-navy);
+  background: var(--white);
+  font-family: var(--font-sans), "Instrument Sans", system-ui, sans-serif;
+  letter-spacing: 0.2px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--deep-navy);
+  color: var(--white);
+}
+
+/* Tipografi — wh.gov custom typography tokenlarinin karsiligi */
+.wh-display {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.08;
+}
+.wh-h1 {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 1.2px;
+  line-height: 1.08;
+}
+.wh-h2 {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0.76px;
+  line-height: 1.18;
+}
+.wh-h3 {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0.56px;
+  line-height: 1.18;
+}
+/* Nord yerine: Instrument Sans 600, buyuk harf, genis aralik */
+.wh-eyebrow {
+  font-family: var(--font-sans), "Instrument Sans", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.wh-label {
+  font-family: var(--font-sans), "Instrument Sans", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.84px;
+  text-transform: uppercase;
+}
+
+/* Butonlar */
+.wh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  font-family: var(--font-sans), "Instrument Sans", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid var(--deep-navy);
+  background: var(--deep-navy);
+  color: var(--white);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.wh-btn:hover:not(:disabled) {
+  background: var(--navy-accent);
+  border-color: var(--navy-accent);
+}
+.wh-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.wh-btn--ghost {
+  background: transparent;
+  color: var(--deep-navy);
+}
+.wh-btn--ghost:hover:not(:disabled) {
+  background: var(--deep-navy);
+  color: var(--white);
+}
+.wh-btn--light {
+  background: var(--white);
+  color: var(--deep-navy);
+  border-color: var(--white);
+}
+.wh-btn--light:hover:not(:disabled) {
+  background: var(--stone);
+  border-color: var(--stone);
+}
+.wh-btn--red {
+  background: var(--red);
+  border-color: var(--red);
+}
+.wh-btn--red:hover:not(:disabled) {
+  background: var(--deep-red);
+  border-color: var(--deep-red);
+}
+
+/* Form alanlari */
+.wh-input {
+  width: 100%;
+  border: 1px solid var(--pale-gray);
+  background: var(--white);
+  padding: 12px 14px;
+  font-family: var(--font-sans), "Instrument Sans", system-ui, sans-serif;
+  font-size: 15px;
+  color: var(--deep-navy);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.wh-input:focus {
+  border-color: var(--deep-navy);
+}
+.wh-input::placeholder {
+  color: var(--gray);
+}
+
+/* Ince cizgi ve kart */
+.wh-rule {
+  height: 1px;
+  background: var(--pale-gray);
+}
+.wh-card {
+  background: var(--white);
+  border: 1px solid var(--pale-gray);
+}
+
+/* RainbowKit dugmesini tema ile hizala */
+[data-rk] button {
+  font-family: var(--font-sans), "Instrument Sans", system-ui, sans-serif !important;
+}
+
+@keyframes wh-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.wh-fade {
+  animation: wh-fade 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

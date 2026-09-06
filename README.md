@@ -174,3 +174,49 @@ Prop House, 2022 döneminin tipik "hibrit" mimarisidir. Zincirden bakiye okur am
 flooor.fun ise "kontrat her şeydir" prensibiyle kurulmuştur. Arayüz sadece bir pencere, backend hiç yok. Bu yaklaşım daha az özellik sunar ama sıfır işletme maliyeti, tam şeffaflık ve kapatılamazlık sağlar.
 
 Bu projenin amacı, Prop House'un teklif ve oylama mantığını, flooor.fun'un backend'siz felsefesiyle yeniden kurmaktır. Yani teklif ve oylama kontrata girer, arayüz statik olur, sunucu hiç olmaz.
+
+---
+
+## 7. Bu repo: De White House
+
+Yukarıdaki sonucun uygulaması. flooor.fun'un iskeleti (Next.js statik export, wagmi, RainbowKit, Base) üzerine Prop House'un zamanlı tur mantığı, tamamen zincir üstünde. Arayüz whitehouse.gov'un tipografisini ve paletini kullanır: Instrument Serif başlıklar, Instrument Sans gövde, lacivert (#0D132D), kırmızı (#B50000), amber (#FFBD00).
+
+### Yapı
+
+| Yol | Ne |
+|---|---|
+| `contracts/DeWhiteHouse.sol` | Tur, teklif, oy, sonuç. Tek kontrat. |
+| `contracts/DeWhiteHouse.abi.json` | solc çıktısı ABI. |
+| `app/page.tsx` | Tek sayfa: Briefing Room (mevcut tur), Docket (teklifler), Submit (teklif formu), Administration (tur açma, hazine), Archive. |
+| `app/abi/` | viem `parseAbi` ile insan okunur ABI'ler. |
+| `app/lib/` | Kontrat adresi, işlem bekleme, hata çevirisi, biçimlendirme. |
+| `app/components/` | Header, Footer, Seal. |
+
+### Kontrat mantığı
+
+- **Administration** (deploy eden cüzdan) `createRound` ile tur açar. Gönderilen ETH hazine olur. Herkes `fundRound` ile hazineye ekleme yapabilir.
+- Tur üç fazdan geçer: **Proposing** → **Voting** → **Ended**. Süreler tur açılırken verilir.
+- **Propose:** VRNouns sahibi olan cüzdan, teklif döneminde bir teklif yazar. Başlık (120 byte), özet (280 byte), tam metin (6000 byte) zincirde saklanır. Cüzdan başına tur başına bir teklif. Tur başına en fazla 64 teklif.
+- **Vote:** Oylama döneminde oy gücü = `balanceOf` (1 VRNouns = 1 oy). Oylar teklifler arasında bölünebilir, toplam bakiyeyi aşamaz.
+- **Finalize:** Oylama bitince herkes çağırabilir. Teklifler oya göre sıralanır, ilk `numWinners` teklif hazineyi eşit paylaşır. Sıfır oy alan teklif kazanamaz. Artan tutar yönetime döner.
+- Yönetim teklif silemez, oy değiştiremez, kazanan seçemez. Sadece tur açar ve iptal edebilir (iptalde hazine yönetime iade edilir).
+
+### Kurulum
+
+```bash
+npm install
+cp .env.example .env.local   # değerleri doldur
+npm run dev
+```
+
+### Deploy
+
+1. `contracts/DeWhiteHouse.sol` dosyasını Base'e deploy et. Constructor parametresi VRNouns adresi: `0xbB56a9359DF63014B3347585565d6F80Ac6305fd`. Remix veya Foundry kullanılabilir.
+2. Kontrat adresini `.env.local` içinde `NEXT_PUBLIC_CONTRACT_ADDR` olarak yaz.
+3. Statik siteyi üret ve GitHub Pages'e yükle:
+
+```bash
+npm run deploy
+```
+
+Kontrat deploy edilmeden sayfa açılır ama sarı bir uyarı gösterir ve yazma işlemleri kapalı kalır.
