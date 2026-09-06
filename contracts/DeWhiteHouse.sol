@@ -1,59 +1,53 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @notice Minimal ERC-721 surface used for gating.
 interface IERC721Like {
     function balanceOf(address owner) external view returns (uint256);
 }
 
 /**
  * @title DeWhiteHouse
- * @notice Prop House'un zamanli tur mantigi, backend'siz ve tamamen zincir ustunde.
+ * @notice Yonetimsiz, backend'siz, tamamen zincir ustu teklif ve oylama.
  *
- *  - Yonetim (administration) bir tur acar ve odul havuzunu ETH olarak yatirir.
- *  - Koleksiyon (VRNouns) sahipleri teklif dönemi boyunca teklif yazar.
- *  - Oylama doneminde sahipler oylarini tekliflere dagitir. Oy gucu = balanceOf.
- *  - Oylama bitince herkes finalize cagirabilir: teklifler oya gore siralanir,
- *    ilk numWinners teklif esit pay alir. Oy almayan teklif kazanamaz.
+ *  flooor.fun'daki epoch mantigi gibi turlar kendiliginden doner:
+ *    tur no  = block.timestamp / ROUND_LENGTH
+ *    ilk 16 saat: teklif donemi
+ *    son 8 saat: oylama donemi
  *
- *  Kalici veri: tur, teklif metni, oylar, kazananlar. Sunucu yok, veritabani yok.
+ *  - Herkes hazineye ETH ekleyebilir (mevcut veya gelecek tur icin).
+ *  - Koleksiyon sahipleri teklif doneminde bir teklif yazar.
+ *  - Oylama doneminde oy gucu = balanceOf. Oylar tekliflere dagitilir.
+ *  - Tur bitince ilk yazma islemi (teklif, oy, hazine) onceki turu OTOMATIK
+ *    kapatir: en cok oy alan NUM_WINNERS teklif hazineyi esit paylasir ve
+ *    odeme kazananlara dogrudan gonderilir. Odenmeyen bakiye sonraki tura
+ *    devreder. Isteyen settle(roundId) ile elle de tetikleyebilir.
+ *
+ *  Sahip yok. Iptal yok. Duzenleme yok. Kimse kazanan secemez.
  */
 contract DeWhiteHouse {
     // ---------------------------------------------------------------------
     // Sabitler
     // ---------------------------------------------------------------------
+    uint256 public constant ROUND_LENGTH = 24 hours;
+    uint256 public constant PROPOSING_LENGTH = 16 hours; // kalan 8 saat oylama (flooor 16/8)
+    uint256 public constant NUM_WINNERS = 3;
     uint256 public constant MAX_PROPOSALS_PER_ROUND = 64;
     uint256 public constant MAX_TITLE_BYTES = 120;
     uint256 public constant MAX_TLDR_BYTES = 280;
     uint256 public constant MAX_BODY_BYTES = 6000;
+    uint256 public constant MAX_AUTO_SETTLE = 3; // tek islemde en fazla bu kadar tur kapanir
+
+    IERC721Like public immutable collection;
+    bool private locked;
 
     // ---------------------------------------------------------------------
     // Durum
     // ---------------------------------------------------------------------
-    IERC721Like public immutable collection;
-    address public administration;
-    bool private locked;
-
-    enum RoundState {
-        NotStarted,
+    enum Phase {
         Proposing,
         Voting,
         Ended,
-        Finalized,
-        Cancelled
-    }
-
-    struct Round {
-        string title;
-        string description;
-        uint64 proposingStart;
-        uint64 proposingEnd;
-        uint64 votingEnd;
-        uint16 numWinners;
-        uint256 budget; // toplam odul havuzu (wei)
-        uint256 proposalCount;
-        bool finalized;
-        bool cancelled;
+        Finalized
     }
 
     struct Proposal {
@@ -68,33 +62,42 @@ contract DeWhiteHouse {
         bool won;
     }
 
-    Round[] private _rounds;
     Proposal[] private _proposals;
 
+    mapping(uint256 => uint256) public budget; // roundId => wei
+    mapping(uint256 => bool) public finalized;
     mapping(uint256 => uint256[]) private _roundProposalIds;
     mapping(uint256 => uint256[]) private _roundWinners;
     mapping(uint256 => mapping(address => uint256)) public votesUsed;
     mapping(uint256 => mapping(address => bool)) public hasProposed;
 
+    // Arsiv icin: hareket goren tur numaralari
+    uint256[] private _touchedRounds;
+    mapping(uint256 => bool) private _touched;
+
+    // Otomatik kapanis kuyrugu: sadece "o an mevcut" olan turlar eklenir, bu
+    // yuzden artan siradadir. _settlePtr'den itibaren bitmis olanlar kapatilir.
+    uint256[] private _settleQueue;
+    mapping(uint256 => bool) private _queued;
+    uint256 private _settlePtr;
+
+    // Dogrudan odeme basarisiz olursa (ornegin ETH kabul etmeyen kontrat) pay
+    // burada bekler ve withdraw() ile cekilir. Digerlerinin odemesini bloklamaz.
+    mapping(address => uint256) public pendingWithdrawals;
+
     // ---------------------------------------------------------------------
     // Olaylar
     // ---------------------------------------------------------------------
-    event RoundCreated(uint256 indexed roundId, string title, uint64 proposingStart, uint64 proposingEnd, uint64 votingEnd, uint16 numWinners, uint256 budget);
-    event RoundFunded(uint256 indexed roundId, address indexed from, uint256 amount, uint256 newBudget);
-    event RoundCancelled(uint256 indexed roundId, uint256 refunded);
-    event RoundFinalized(uint256 indexed roundId, uint256[] winners, uint256 perWinner);
+    event Funded(uint256 indexed roundId, address indexed from, uint256 amount, uint256 newBudget);
     event ProposalSubmitted(uint256 indexed roundId, uint256 indexed proposalId, address indexed proposer, string title);
     event VoteCast(uint256 indexed roundId, uint256 indexed proposalId, address indexed voter, uint256 weight);
-    event AdministrationTransferred(address indexed previous, address indexed next);
+    event RoundSettled(uint256 indexed roundId, uint256[] winners, uint256 perWinner, uint256 rolledOver);
+    event Paid(address indexed to, uint256 amount, bool direct);
+    event Withdrawn(address indexed to, uint256 amount);
 
     // ---------------------------------------------------------------------
     // Degistiriciler
     // ---------------------------------------------------------------------
-    modifier onlyAdministration() {
-        require(msg.sender == administration, "not administration");
-        _;
-    }
-
     modifier nonReentrant() {
         require(!locked, "reentrancy");
         locked = true;
@@ -110,91 +113,54 @@ contract DeWhiteHouse {
     constructor(address collection_) {
         require(collection_ != address(0), "zero collection");
         collection = IERC721Like(collection_);
-        administration = msg.sender;
     }
 
     // ---------------------------------------------------------------------
-    // Yonetim
+    // Hazine
     // ---------------------------------------------------------------------
 
-    /// @notice Yeni tur acar. Gonderilen ETH odul havuzu olur.
-    function createRound(
-        string calldata title,
-        string calldata description,
-        uint64 proposingStart,
-        uint64 proposingDuration,
-        uint64 votingDuration,
-        uint16 numWinners
-    ) external payable onlyAdministration returns (uint256 roundId) {
-        require(bytes(title).length > 0 && bytes(title).length <= MAX_TITLE_BYTES, "bad title");
-        require(bytes(description).length <= MAX_BODY_BYTES, "description too long");
-        require(proposingDuration > 0 && votingDuration > 0, "bad durations");
-        require(numWinners > 0 && numWinners <= MAX_PROPOSALS_PER_ROUND, "bad numWinners");
-        if (proposingStart == 0) proposingStart = uint64(block.timestamp);
-
-        roundId = _rounds.length;
-        _rounds.push(
-            Round({
-                title: title,
-                description: description,
-                proposingStart: proposingStart,
-                proposingEnd: proposingStart + proposingDuration,
-                votingEnd: proposingStart + proposingDuration + votingDuration,
-                numWinners: numWinners,
-                budget: msg.value,
-                proposalCount: 0,
-                finalized: false,
-                cancelled: false
-            })
-        );
-
-        emit RoundCreated(roundId, title, proposingStart, proposingStart + proposingDuration, proposingStart + proposingDuration + votingDuration, numWinners, msg.value);
+    /// @notice Mevcut turun hazinesine ekler.
+    receive() external payable nonReentrant {
+        _autoSettle();
+        _fund(currentRoundId());
     }
 
-    /// @notice Herkes bir turun havuzuna katki yapabilir (finalize oncesi).
-    function fundRound(uint256 roundId) external payable {
-        Round storage r = _round(roundId);
-        require(!r.finalized && !r.cancelled, "round closed");
+    /// @notice Belirli bir turun hazinesine ekler (mevcut veya gelecek).
+    function fund(uint256 roundId) external payable nonReentrant {
+        require(roundId >= currentRoundId(), "round is over");
+        _autoSettle();
+        _fund(roundId);
+    }
+
+    function _fund(uint256 roundId) private {
         require(msg.value > 0, "zero value");
-        r.budget += msg.value;
-        emit RoundFunded(roundId, msg.sender, msg.value, r.budget);
-    }
-
-    /// @notice Tur iptal edilir, havuz yonetime iade edilir.
-    function cancelRound(uint256 roundId) external onlyAdministration nonReentrant {
-        Round storage r = _round(roundId);
-        require(!r.finalized && !r.cancelled, "round closed");
-        r.cancelled = true;
-        uint256 refund = r.budget;
-        r.budget = 0;
-        if (refund > 0) _pay(administration, refund);
-        emit RoundCancelled(roundId, refund);
-    }
-
-    function transferAdministration(address next) external onlyAdministration {
-        require(next != address(0), "zero address");
-        emit AdministrationTransferred(administration, next);
-        administration = next;
+        _touch(roundId);
+        if (roundId == currentRoundId()) _enqueue(roundId);
+        budget[roundId] += msg.value;
+        emit Funded(roundId, msg.sender, msg.value, budget[roundId]);
     }
 
     // ---------------------------------------------------------------------
     // Teklif
     // ---------------------------------------------------------------------
 
-    function propose(
-        uint256 roundId,
-        string calldata title,
-        string calldata tldr,
-        string calldata body
-    ) external onlyHolder returns (uint256 proposalId) {
-        Round storage r = _round(roundId);
-        require(roundState(roundId) == RoundState.Proposing, "not proposing period");
+    function propose(string calldata title, string calldata tldr, string calldata body)
+        external
+        onlyHolder
+        nonReentrant
+        returns (uint256 proposalId)
+    {
+        _autoSettle();
+        uint256 roundId = currentRoundId();
+        require(phaseOf(roundId) == Phase.Proposing, "not proposing period");
         require(!hasProposed[roundId][msg.sender], "one proposal per wallet");
-        require(r.proposalCount < MAX_PROPOSALS_PER_ROUND, "round full");
+        require(_roundProposalIds[roundId].length < MAX_PROPOSALS_PER_ROUND, "round full");
         require(bytes(title).length > 0 && bytes(title).length <= MAX_TITLE_BYTES, "bad title");
         require(bytes(tldr).length > 0 && bytes(tldr).length <= MAX_TLDR_BYTES, "bad tldr");
         require(bytes(body).length <= MAX_BODY_BYTES, "body too long");
 
+        _touch(roundId);
+        _enqueue(roundId);
         proposalId = _proposals.length;
         _proposals.push(
             Proposal({
@@ -210,7 +176,6 @@ contract DeWhiteHouse {
             })
         );
         _roundProposalIds[roundId].push(proposalId);
-        r.proposalCount += 1;
         hasProposed[roundId][msg.sender] = true;
 
         emit ProposalSubmitted(roundId, proposalId, msg.sender, title);
@@ -220,12 +185,12 @@ contract DeWhiteHouse {
     // Oy
     // ---------------------------------------------------------------------
 
-    /// @notice Oy gucu = koleksiyondaki bakiye. Bir tur icinde toplam agirlik bakiyeyi asamaz.
-    function vote(uint256 proposalId, uint256 weight) external onlyHolder {
+    function vote(uint256 proposalId, uint256 weight) external onlyHolder nonReentrant {
+        _autoSettle();
         require(proposalId < _proposals.length, "no such proposal");
         Proposal storage p = _proposals[proposalId];
         uint256 roundId = p.roundId;
-        require(roundState(roundId) == RoundState.Voting, "not voting period");
+        require(phaseOf(roundId) == Phase.Voting, "not voting period");
         require(weight > 0, "zero weight");
 
         uint256 power = collection.balanceOf(msg.sender);
@@ -234,20 +199,17 @@ contract DeWhiteHouse {
 
         votesUsed[roundId][msg.sender] = used + weight;
         p.votes += weight;
-
         emit VoteCast(roundId, proposalId, msg.sender, weight);
     }
 
-    /// @notice Birden fazla teklife tek islemde oy dagitir.
-    function voteBatch(uint256[] calldata proposalIds, uint256[] calldata weights) external onlyHolder {
+    function voteBatch(uint256[] calldata proposalIds, uint256[] calldata weights) external onlyHolder nonReentrant {
+        _autoSettle();
         require(proposalIds.length == weights.length && proposalIds.length > 0, "length mismatch");
+        require(proposalIds[0] < _proposals.length, "no such proposal");
         uint256 roundId = _proposals[proposalIds[0]].roundId;
-        require(roundState(roundId) == RoundState.Voting, "not voting period");
+        require(phaseOf(roundId) == Phase.Voting, "not voting period");
 
-        uint256 power = collection.balanceOf(msg.sender);
-        uint256 used = votesUsed[roundId][msg.sender];
         uint256 total;
-
         for (uint256 i = 0; i < proposalIds.length; i++) {
             require(proposalIds[i] < _proposals.length, "no such proposal");
             Proposal storage p = _proposals[proposalIds[i]];
@@ -258,6 +220,8 @@ contract DeWhiteHouse {
             emit VoteCast(roundId, proposalIds[i], msg.sender, weights[i]);
         }
 
+        uint256 power = collection.balanceOf(msg.sender);
+        uint256 used = votesUsed[roundId][msg.sender];
         require(used + total <= power, "exceeds voting power");
         votesUsed[roundId][msg.sender] = used + total;
     }
@@ -266,17 +230,48 @@ contract DeWhiteHouse {
     // Sonuc
     // ---------------------------------------------------------------------
 
-    /// @notice Oylama bittikten sonra herkes cagirabilir. Kazananlara odeme yapar.
-    function finalize(uint256 roundId) external nonReentrant {
-        Round storage r = _round(roundId);
-        require(roundState(roundId) == RoundState.Ended, "round not ended");
+    /// @notice Bitmis bir turu elle kapatir. Normalde gerek yok, her yazma
+    ///         islemi zaten otomatik kapatir. Herkes cagirabilir.
+    function settle(uint256 roundId) external nonReentrant {
+        require(phaseOf(roundId) == Phase.Ended, "round not ended");
+        _settle(roundId);
+    }
+
+    /// @notice Dogrudan odeme basarisiz olmus kazananlar payini buradan ceker.
+    function withdraw() external nonReentrant {
+        uint256 amt = pendingWithdrawals[msg.sender];
+        require(amt > 0, "nothing to withdraw");
+        pendingWithdrawals[msg.sender] = 0;
+        (bool ok, ) = payable(msg.sender).call{value: amt}("");
+        require(ok, "withdraw failed");
+        emit Withdrawn(msg.sender, amt);
+    }
+
+    /// @dev Kuyruktaki bitmis turlari sirayla kapatir. Gaz sinirini asmamak
+    ///      icin bir cagrida en fazla MAX_AUTO_SETTLE tur.
+    function _autoSettle() private {
+        uint256 len = _settleQueue.length;
+        uint256 done;
+        while (_settlePtr < len && done < MAX_AUTO_SETTLE) {
+            uint256 id = _settleQueue[_settlePtr];
+            if (phaseOf(id) == Phase.Ended) {
+                _settle(id);
+            } else if (phaseOf(id) != Phase.Finalized) {
+                break; // mevcut tur; henuz bitmedi
+            }
+            _settlePtr += 1;
+            done += 1;
+        }
+    }
+
+    function _settle(uint256 roundId) private {
+        finalized[roundId] = true;
 
         uint256[] memory ids = _roundProposalIds[roundId];
         uint256 n = ids.length;
-        uint256 k = r.numWinners < n ? r.numWinners : n;
+        uint256 k = NUM_WINNERS < n ? NUM_WINNERS : n;
 
-        // Secim siralamasi: en cok oy alan k teklif. Beraberlikte erken teklif kazanir.
-        uint256[] memory winners = new uint256[](k);
+        uint256[] memory picked = new uint256[](k);
         uint256 count;
         for (uint256 slot = 0; slot < k; slot++) {
             uint256 bestIdx = type(uint256).max;
@@ -290,45 +285,69 @@ contract DeWhiteHouse {
                 }
             }
             if (bestIdx == type(uint256).max || bestVotes == 0) break;
-            winners[count++] = ids[bestIdx];
+            picked[count++] = ids[bestIdx];
             ids[bestIdx] = type(uint256).max;
         }
 
-        r.finalized = true;
-        uint256 budget = r.budget;
-        r.budget = 0;
+        uint256 pool = budget[roundId];
+        budget[roundId] = 0;
+        uint256 perWinner = count > 0 ? pool / count : 0;
+        uint256 rolled = pool - perWinner * count;
 
-        uint256 perWinner = count > 0 ? budget / count : 0;
-        uint256[] memory finalWinners = new uint256[](count);
+        uint256[] memory winners = new uint256[](count);
         for (uint256 i = 0; i < count; i++) {
-            finalWinners[i] = winners[i];
-            _proposals[winners[i]].won = true;
-            _roundWinners[roundId].push(winners[i]);
+            winners[i] = picked[i];
+            _proposals[picked[i]].won = true;
+            _roundWinners[roundId].push(picked[i]);
         }
 
-        emit RoundFinalized(roundId, finalWinners, perWinner);
-
-        for (uint256 i = 0; i < count; i++) {
-            _pay(_proposals[winners[i]].proposer, perWinner);
+        // Odenmeyen bakiye mevcut tura devreder (flooor leftover devri gibi)
+        if (rolled > 0) {
+            uint256 next = currentRoundId();
+            if (next <= roundId) next = roundId + 1;
+            _touch(next);
+            _enqueue(next);
+            budget[next] += rolled;
         }
-        uint256 leftover = budget - perWinner * count;
-        if (leftover > 0) _pay(administration, leftover);
+
+        emit RoundSettled(roundId, winners, perWinner, rolled);
+
+        // Kazananlara dogrudan odeme; basarisiz olursa pull'a duser
+        for (uint256 i = 0; i < count; i++) {
+            _pay(_proposals[picked[i]].proposer, perWinner);
+        }
     }
 
     // ---------------------------------------------------------------------
     // Okuma
     // ---------------------------------------------------------------------
 
-    function roundCount() external view returns (uint256) {
-        return _rounds.length;
+    function currentRoundId() public view returns (uint256) {
+        return block.timestamp / ROUND_LENGTH;
+    }
+
+    function roundStart(uint256 roundId) public pure returns (uint256) {
+        return roundId * ROUND_LENGTH;
+    }
+
+    function proposingEnd(uint256 roundId) public pure returns (uint256) {
+        return roundId * ROUND_LENGTH + PROPOSING_LENGTH;
+    }
+
+    function votingEnd(uint256 roundId) public pure returns (uint256) {
+        return (roundId + 1) * ROUND_LENGTH;
+    }
+
+    function phaseOf(uint256 roundId) public view returns (Phase) {
+        if (finalized[roundId]) return Phase.Finalized;
+        uint256 t = block.timestamp;
+        if (t < proposingEnd(roundId)) return Phase.Proposing; // gelecek turlar da "Proposing" gorunur
+        if (t < votingEnd(roundId)) return Phase.Voting;
+        return Phase.Ended;
     }
 
     function proposalCount() external view returns (uint256) {
         return _proposals.length;
-    }
-
-    function getRound(uint256 roundId) external view returns (Round memory) {
-        return _round(roundId);
     }
 
     function getProposal(uint256 proposalId) external view returns (Proposal memory) {
@@ -346,14 +365,20 @@ contract DeWhiteHouse {
         return _roundWinners[roundId];
     }
 
-    function roundState(uint256 roundId) public view returns (RoundState) {
-        Round storage r = _round(roundId);
-        if (r.cancelled) return RoundState.Cancelled;
-        if (r.finalized) return RoundState.Finalized;
-        if (block.timestamp < r.proposingStart) return RoundState.NotStarted;
-        if (block.timestamp < r.proposingEnd) return RoundState.Proposing;
-        if (block.timestamp < r.votingEnd) return RoundState.Voting;
-        return RoundState.Ended;
+    function roundProposalCount(uint256 roundId) external view returns (uint256) {
+        return _roundProposalIds[roundId].length;
+    }
+
+    /// @notice Kapanmayi bekleyen (bitmis ama henuz kapatilmamis) tur sayisi.
+    function pendingSettlements() external view returns (uint256 n) {
+        for (uint256 i = _settlePtr; i < _settleQueue.length; i++) {
+            if (phaseOf(_settleQueue[i]) == Phase.Ended) n++;
+        }
+    }
+
+    /// @notice Hareket gormus tur numaralari (arsiv listesi icin).
+    function touchedRounds() external view returns (uint256[] memory) {
+        return _touchedRounds;
     }
 
     function votingPower(address account) external view returns (uint256) {
@@ -370,14 +395,25 @@ contract DeWhiteHouse {
     // Ic
     // ---------------------------------------------------------------------
 
-    function _round(uint256 roundId) private view returns (Round storage) {
-        require(roundId < _rounds.length, "no such round");
-        return _rounds[roundId];
+    function _touch(uint256 roundId) private {
+        if (!_touched[roundId]) {
+            _touched[roundId] = true;
+            _touchedRounds.push(roundId);
+        }
     }
 
+    function _enqueue(uint256 roundId) private {
+        if (!_queued[roundId]) {
+            _queued[roundId] = true;
+            _settleQueue.push(roundId);
+        }
+    }
+
+    /// @dev Sinirli gazla dogrudan gonderir; olmazsa withdraw icin biriktirir.
     function _pay(address to, uint256 amount) private {
         if (amount == 0) return;
-        (bool ok, ) = payable(to).call{value: amount}("");
-        require(ok, "transfer failed");
+        (bool ok, ) = payable(to).call{value: amount, gas: 30_000}("");
+        if (!ok) pendingWithdrawals[to] += amount;
+        emit Paid(to, amount, ok);
     }
 }

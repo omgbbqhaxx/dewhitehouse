@@ -179,7 +179,7 @@ Bu projenin amacı, Prop House'un teklif ve oylama mantığını, flooor.fun'un 
 
 ## 7. Bu repo: De White House
 
-Yukarıdaki sonucun uygulaması. flooor.fun'un iskeleti (Next.js statik export, wagmi, RainbowKit, Base) üzerine Prop House'un zamanlı tur mantığı, tamamen zincir üstünde. Arayüz whitehouse.gov'un tipografisini ve paletini kullanır: Instrument Serif başlıklar, Instrument Sans gövde, lacivert (#0D132D), kırmızı (#B50000), amber (#FFBD00).
+Yukarıdaki sonucun uygulaması. flooor.fun'un iskeleti (Next.js statik export, wagmi, RainbowKit, Base) üzerine Prop House'un zamanlı tur mantığı, tamamen zincir üstünde. Arayüz whitehouse.gov'un tipografisini ve paletini kullanır: Instrument Serif başlıklar, Instrument Sans gövde, DM Mono etiketler; beyaz ve taş rengi (#E8E6E0) bölümler, lacivert (#0D132D) sadece başlık ve alt bilgide, kırmızı (#B50000) sadece ana butonda.
 
 ### Yapı
 
@@ -187,19 +187,24 @@ Yukarıdaki sonucun uygulaması. flooor.fun'un iskeleti (Next.js statik export, 
 |---|---|
 | `contracts/DeWhiteHouse.sol` | Tur, teklif, oy, sonuç. Tek kontrat. |
 | `contracts/DeWhiteHouse.abi.json` | solc çıktısı ABI. |
-| `app/page.tsx` | Tek sayfa: Briefing Room (mevcut tur), Docket (teklifler), Submit (teklif formu), Administration (tur açma, hazine), Archive. |
+| `app/page.tsx` | Tek sayfa: Briefing Room (günün turu ve zaman çizelgesi), Docket (teklifler ve oy), Submit (teklif formu), Treasury (hazineye ekleme), Archive. |
 | `app/abi/` | viem `parseAbi` ile insan okunur ABI'ler. |
 | `app/lib/` | Kontrat adresi, işlem bekleme, hata çevirisi, biçimlendirme. |
 | `app/components/` | Header, Footer, Seal. |
 
 ### Kontrat mantığı
 
-- **Administration** (deploy eden cüzdan) `createRound` ile tur açar. Gönderilen ETH hazine olur. Herkes `fundRound` ile hazineye ekleme yapabilir.
-- Tur üç fazdan geçer: **Proposing** → **Voting** → **Ended**. Süreler tur açılırken verilir.
-- **Propose:** VRNouns sahibi olan cüzdan, teklif döneminde bir teklif yazar. Başlık (120 byte), özet (280 byte), tam metin (6000 byte) zincirde saklanır. Cüzdan başına tur başına bir teklif. Tur başına en fazla 64 teklif.
-- **Vote:** Oylama döneminde oy gücü = `balanceOf` (1 VRNouns = 1 oy). Oylar teklifler arasında bölünebilir, toplam bakiyeyi aşamaz.
-- **Finalize:** Oylama bitince herkes çağırabilir. Teklifler oya göre sıralanır, ilk `numWinners` teklif hazineyi eşit paylaşır. Sıfır oy alan teklif kazanamaz. Artan tutar yönetime döner.
-- Yönetim teklif silemez, oy değiştiremez, kazanan seçemez. Sadece tur açar ve iptal edebilir (iptalde hazine yönetime iade edilir).
+Yönetim yok. Sahip yok. flooor.fun'daki epoch mantığı gibi turlar saatle döner:
+
+- **Tur numarası** = `block.timestamp / 24 saat`. Her tur UTC gece yarısı başlar.
+- **İlk 16 saat teklif dönemi.** VRNouns sahibi cüzdan bir teklif yazar. Başlık (120 byte), özet (280 byte), tam metin (6000 byte) zincirde saklanır. Cüzdan başına tur başına bir teklif, tur başına en fazla 64 teklif.
+- **Son 8 saat oylama dönemi.** Oy gücü = `balanceOf` (1 VRNouns = 1 oy). Oylar teklifler arasında bölünebilir, toplam bakiyeyi aşamaz.
+- **Hazine.** Herkes `fund(roundId)` ile veya kontrata düz ETH göndererek hazineye ekler. Düz gönderim o günkü tura düşer.
+- **Otomatik kapanış.** Tur bitince kontrata yapılan ilk yazma işlemi (teklif, oy, hazine ekleme) önceki turu kendiliğinden kapatır: teklifler oya göre sıralanır, ilk 3 teklif hazineyi eşit paylaşır, ödeme kazananlara **doğrudan gönderilir**. Kimsenin claim etmesine gerek yok. Tek işlemde en fazla 3 tur kapanır. İsteyen `settle(roundId)` ile elle de tetikleyebilir.
+- **Devir.** Sıfır oy alan teklif kazanamaz. Ödenmeyen bakiye (kazanan yoksa tamamı) bir sonraki tura devreder.
+- **Güvenli ödeme.** Doğrudan gönderim başarısız olursa (ETH kabul etmeyen kontrat cüzdan gibi) pay `pendingWithdrawals` altında bekler, `withdraw()` ile çekilir. Diğer kazananların ödemesini bloklamaz.
+
+Sahip fonksiyonu yok. İptal yok. Düzenleme yok. Kimse kazanan seçemez.
 
 ### Kurulum
 
@@ -211,7 +216,7 @@ npm run dev
 
 ### Deploy
 
-1. `contracts/DeWhiteHouse.sol` dosyasını Base'e deploy et. Constructor parametresi VRNouns adresi: `0xbB56a9359DF63014B3347585565d6F80Ac6305fd`. Remix veya Foundry kullanılabilir.
+1. `contracts/DeWhiteHouse.sol` dosyasını Base'e deploy et. Tek constructor parametresi VRNouns adresi: `0xbB56a9359DF63014B3347585565d6F80Ac6305fd`. Remix veya Foundry kullanılabilir.
 2. Kontrat adresini `.env.local` içinde `NEXT_PUBLIC_CONTRACT_ADDR` olarak yaz.
 3. Statik siteyi üret ve GitHub Pages'e yükle:
 

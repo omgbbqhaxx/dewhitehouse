@@ -15,18 +15,55 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "previous",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "roundId",
+        "type": "uint256"
       },
       {
         "indexed": true,
         "internalType": "address",
-        "name": "next",
+        "name": "from",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newBudget",
+        "type": "uint256"
       }
     ],
-    "name": "AdministrationTransferred",
+    "name": "Funded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "direct",
+        "type": "bool"
+      }
+    ],
+    "name": "Paid",
     "type": "event"
   },
   {
@@ -71,74 +108,6 @@
       },
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "refunded",
-        "type": "uint256"
-      }
-    ],
-    "name": "RoundCancelled",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "title",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "proposingStart",
-        "type": "uint64"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "proposingEnd",
-        "type": "uint64"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "votingEnd",
-        "type": "uint64"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint16",
-        "name": "numWinners",
-        "type": "uint16"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "budget",
-        "type": "uint256"
-      }
-    ],
-    "name": "RoundCreated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
         "internalType": "uint256[]",
         "name": "winners",
         "type": "uint256[]"
@@ -148,40 +117,15 @@
         "internalType": "uint256",
         "name": "perWinner",
         "type": "uint256"
-      }
-    ],
-    "name": "RoundFinalized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "from",
-        "type": "address"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newBudget",
+        "name": "rolledOver",
         "type": "uint256"
       }
     ],
-    "name": "RoundFunded",
+    "name": "RoundSettled",
     "type": "event"
   },
   {
@@ -214,6 +158,38 @@
     ],
     "name": "VoteCast",
     "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "Withdrawn",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_AUTO_SETTLE",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [],
@@ -269,12 +245,38 @@
   },
   {
     "inputs": [],
-    "name": "administration",
+    "name": "NUM_WINNERS",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "uint256",
         "name": "",
-        "type": "address"
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "PROPOSING_LENGTH",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "ROUND_LENGTH",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -284,13 +286,19 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "roundId",
+        "name": "",
         "type": "uint256"
       }
     ],
-    "name": "cancelRound",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "name": "budget",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -307,47 +315,35 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "title",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "description",
-        "type": "string"
-      },
-      {
-        "internalType": "uint64",
-        "name": "proposingStart",
-        "type": "uint64"
-      },
-      {
-        "internalType": "uint64",
-        "name": "proposingDuration",
-        "type": "uint64"
-      },
-      {
-        "internalType": "uint64",
-        "name": "votingDuration",
-        "type": "uint64"
-      },
-      {
-        "internalType": "uint16",
-        "name": "numWinners",
-        "type": "uint16"
-      }
-    ],
-    "name": "createRound",
+    "inputs": [],
+    "name": "currentRoundId",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "roundId",
+        "name": "",
         "type": "uint256"
       }
     ],
-    "stateMutability": "payable",
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "finalized",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -358,20 +354,7 @@
         "type": "uint256"
       }
     ],
-    "name": "finalize",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      }
-    ],
-    "name": "fundRound",
+    "name": "fund",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -435,77 +418,6 @@
           }
         ],
         "internalType": "struct DeWhiteHouse.Proposal",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roundId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getRound",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "string",
-            "name": "title",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "description",
-            "type": "string"
-          },
-          {
-            "internalType": "uint64",
-            "name": "proposingStart",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint64",
-            "name": "proposingEnd",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint64",
-            "name": "votingEnd",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint16",
-            "name": "numWinners",
-            "type": "uint16"
-          },
-          {
-            "internalType": "uint256",
-            "name": "budget",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "proposalCount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "finalized",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "cancelled",
-            "type": "bool"
-          }
-        ],
-        "internalType": "struct DeWhiteHouse.Round",
         "name": "",
         "type": "tuple"
       }
@@ -624,7 +536,26 @@
   },
   {
     "inputs": [],
-    "name": "proposalCount",
+    "name": "pendingSettlements",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "n",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "pendingWithdrawals",
     "outputs": [
       {
         "internalType": "uint256",
@@ -641,7 +572,34 @@
         "internalType": "uint256",
         "name": "roundId",
         "type": "uint256"
-      },
+      }
+    ],
+    "name": "phaseOf",
+    "outputs": [
+      {
+        "internalType": "enum DeWhiteHouse.Phase",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "proposalCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "string",
         "name": "title",
@@ -670,8 +628,33 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "roundCount",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roundId",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposingEnd",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roundId",
+        "type": "uint256"
+      }
+    ],
+    "name": "roundProposalCount",
     "outputs": [
       {
         "internalType": "uint256",
@@ -690,28 +673,41 @@
         "type": "uint256"
       }
     ],
-    "name": "roundState",
+    "name": "roundStart",
     "outputs": [
       {
-        "internalType": "enum DeWhiteHouse.RoundState",
+        "internalType": "uint256",
         "name": "",
-        "type": "uint8"
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "next",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "roundId",
+        "type": "uint256"
       }
     ],
-    "name": "transferAdministration",
+    "name": "settle",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "touchedRounds",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -801,6 +797,25 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "roundId",
+        "type": "uint256"
+      }
+    ],
+    "name": "votingEnd",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "account",
         "type": "address"
@@ -816,5 +831,16 @@
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "receive"
   }
 ]

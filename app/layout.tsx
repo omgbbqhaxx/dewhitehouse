@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Instrument_Sans } from "next/font/google";
+import { Instrument_Serif, Instrument_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SITE_NAME, SITE_URL } from "@/app/lib/config";
@@ -16,6 +16,13 @@ const sans = Instrument_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
+  display: "swap",
+});
+
+const mono = DM_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -42,7 +49,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
       <head>
         <meta name="theme-color" content="#0D132D" />
       </head>
