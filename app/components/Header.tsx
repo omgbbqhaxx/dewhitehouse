@@ -4,7 +4,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Seal from "./Seal";
 
 const NAV = [
-  { label: "Briefing Room", href: "#briefing" },
+  { label: "Buy V(ote)Rnouns", href: "https://flooor.fun", external: true },
   { label: "Proposals", href: "#proposals" },
   { label: "Submit", href: "#submit" },
   { label: "Treasury", href: "#administration" },
@@ -17,13 +17,6 @@ const TICKER =
 export default function Header({ phaseLabel }: { phaseLabel?: string }) {
   return (
     <header className="sticky top-0 z-40" style={{ background: "var(--navy)", color: "#fff" }}>
-      {/* Ust serit: wh.gov'daki kayan beyaz duyuru */}
-      <div className="ticker" style={{ background: "#fff", padding: "6px 0" }}>
-        <div className="ticker-track">
-          {TICKER}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{TICKER}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{TICKER}
-        </div>
-      </div>
-
       {/* Orta satir: sol menu, orta logo, sag cuzdan */}
       <div className="wrap" style={{ maxWidth: 1320 }}>
         <div className="grid grid-cols-3 items-center" style={{ height: 64 }}>
@@ -79,11 +72,24 @@ export default function Header({ phaseLabel }: { phaseLabel?: string }) {
       <div style={{ borderTop: "1px solid var(--hair-light)" }}>
         <nav className="flex items-center justify-center gap-9 overflow-x-auto px-6" style={{ height: 40 }}>
           {NAV.map((n) => (
-            <a key={n.href} href={n.href} className="nav-link">
+            <a
+              key={n.href}
+              href={n.href}
+              className="nav-link"
+              target={n.external ? "_blank" : undefined}
+              rel={n.external ? "noopener noreferrer" : undefined}
+            >
               {n.label}
             </a>
           ))}
         </nav>
+      </div>
+
+      {/* Kayan duyuru: nav'in altinda, bej zeminde */}
+      <div className="ticker" style={{ background: "var(--stone)", padding: "7px 0" }}>
+        <div className="ticker-track">
+          {TICKER}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{TICKER}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{TICKER}
+        </div>
       </div>
     </header>
   );
