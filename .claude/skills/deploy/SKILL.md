@@ -32,7 +32,7 @@ Statik Next.js çıktısını üretip GitHub Pages'e basar. Sunucu yok, sadece d
    ```
    Dal görünüyorsa deploy tamamdır.
 
-7. Sonucu bildir: gh-pages dalına basıldığı, kontrat adresinin ayarlı olup olmadığı ve site adresi. Özel alan adı yoksa adres `https://omgbbqhaxx.github.io/dewhitehouse/` şeklindedir. `public/CNAME` varsa oradaki alan adını yaz.
+7. Sonucu bildir: gh-pages dalına basıldığı, kontrat adresinin ayarlı olup olmadığı ve site adresi. Özel alan adı yoksa adres `https://omgbbqhaxx.github.io/dewhitehouse/` şeklindedir ve deploy scripti `NEXT_PUBLIC_BASE_PATH=/dewhitehouse` ile derler. `public/CNAME` eklenirse o alan adını yaz ve `package.json` deploy scriptinden `NEXT_PUBLIC_BASE_PATH` kısmını kaldır.
 
 ## İlk deploy notu
 

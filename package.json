@@ -7,7 +7,7 @@
     "build": "next build",
     "postbuild": "touch out/.nojekyll",
     "lint": "next lint",
-    "deploy": "rm -rf out && npm run build && gh-pages -d out -b gh-pages --dotfiles"
+    "deploy": "rm -rf out && NEXT_PUBLIC_BASE_PATH=/dewhitehouse next build && gh-pages -d out -b gh-pages --dotfiles"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "2.2.9",
