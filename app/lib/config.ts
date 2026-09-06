@@ -13,4 +13,4 @@ export const CONTRACT_ADDR: Address =
 export const IS_DEPLOYED = CONTRACT_ADDR.toLowerCase() !== ZERO;
 
 export const SITE_NAME = "De White House";
-export const SITE_URL = "https://dewhitehouse.fun";
+export const SITE_URL = "https://dewhite.house";
